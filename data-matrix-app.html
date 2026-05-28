@@ -1,0 +1,917 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Учёт Data Matrix кодов</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+
+        .header {
+            text-align: center;
+            color: white;
+            margin-bottom: 30px;
+        }
+
+        .header h1 {
+            font-size: 2.5rem;
+            margin-bottom: 10px;
+        }
+
+        .header p {
+            font-size: 1.1rem;
+            opacity: 0.9;
+        }
+
+        .card {
+            background: white;
+            border-radius: 10px;
+            padding: 25px;
+            margin-bottom: 20px;
+            box-shadow: 0 10px 40px rgba(0, 0, 0, 0.2);
+        }
+
+        .upload-section {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 15px;
+        }
+
+        .file-input-wrapper {
+            position: relative;
+            overflow: hidden;
+            display: inline-block;
+        }
+
+        .file-input-wrapper input[type=file] {
+            font-size: 100px;
+            position: absolute;
+            left: 0;
+            top: 0;
+            opacity: 0;
+            cursor: pointer;
+        }
+
+        .btn {
+            padding: 12px 30px;
+            border: none;
+            border-radius: 5px;
+            font-size: 1rem;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .btn-primary {
+            background: #667eea;
+            color: white;
+        }
+
+        .btn-primary:hover {
+            background: #5568d3;
+            transform: translateY(-2px);
+        }
+
+        .btn-success {
+            background: #48bb78;
+            color: white;
+        }
+
+        .btn-success:hover {
+            background: #38a169;
+        }
+
+        .btn-danger {
+            background: #f56565;
+            color: white;
+        }
+
+        .btn-danger:hover {
+            background: #e53e3e;
+        }
+
+        .btn-secondary {
+            background: #718096;
+            color: white;
+        }
+
+        .btn-secondary:hover {
+            background: #4a5568;
+        }
+
+        .search-section {
+            display: flex;
+            gap: 15px;
+            margin-bottom: 20px;
+            flex-wrap: wrap;
+        }
+
+        .search-input {
+            flex: 1;
+            min-width: 250px;
+            padding: 12px 15px;
+            border: 2px solid #e2e8f0;
+            border-radius: 5px;
+            font-size: 1rem;
+            transition: border-color 0.3s ease;
+        }
+
+        .search-input:focus {
+            outline: none;
+            border-color: #667eea;
+        }
+
+        .stats {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 15px;
+            margin-bottom: 20px;
+        }
+
+        .stat-card {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 20px;
+            border-radius: 8px;
+            text-align: center;
+        }
+
+        .stat-card h3 {
+            font-size: 2rem;
+            margin-bottom: 5px;
+        }
+
+        .stat-card p {
+            opacity: 0.9;
+        }
+
+        .table-container {
+            overflow-x: auto;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 15px;
+        }
+
+        th, td {
+            padding: 12px 15px;
+            text-align: left;
+            border-bottom: 1px solid #e2e8f0;
+        }
+
+        th {
+            background: #f7fafc;
+            font-weight: 600;
+            color: #4a5568;
+            position: sticky;
+            top: 0;
+        }
+
+        tr:hover {
+            background: #f7fafc;
+        }
+
+        .actions {
+            display: flex;
+            gap: 8px;
+        }
+
+        .btn-small {
+            padding: 6px 12px;
+            font-size: 0.875rem;
+        }
+
+        .empty-state {
+            text-align: center;
+            padding: 40px;
+            color: #a0aec0;
+        }
+
+        .empty-state svg {
+            width: 80px;
+            height: 80px;
+            margin-bottom: 20px;
+            opacity: 0.5;
+        }
+
+        .alert {
+            padding: 15px 20px;
+            border-radius: 5px;
+            margin-bottom: 15px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .alert-success {
+            background: #c6f6d5;
+            color: #22543d;
+            border-left: 4px solid #48bb78;
+        }
+
+        .alert-error {
+            background: #fed7d7;
+            color: #742a2a;
+            border-left: 4px solid #f56565;
+        }
+
+        .alert-info {
+            background: #bee3f8;
+            color: #2c5282;
+            border-left: 4px solid #4299e1;
+        }
+
+        .modal {
+            display: none;
+            position: fixed;
+            z-index: 1000;
+            left: 0;
+            top: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0, 0, 0, 0.5);
+        }
+
+        .modal-content {
+            background-color: white;
+            margin: 10% auto;
+            padding: 30px;
+            border-radius: 10px;
+            width: 90%;
+            max-width: 500px;
+            position: relative;
+        }
+
+        .close {
+            position: absolute;
+            right: 20px;
+            top: 15px;
+            font-size: 28px;
+            font-weight: bold;
+            cursor: pointer;
+            color: #a0aec0;
+        }
+
+        .close:hover {
+            color: #4a5568;
+        }
+
+        .form-group {
+            margin-bottom: 20px;
+        }
+
+        .form-group label {
+            display: block;
+            margin-bottom: 8px;
+            font-weight: 600;
+            color: #4a5568;
+        }
+
+        .form-group input,
+        .form-group textarea {
+            width: 100%;
+            padding: 12px 15px;
+            border: 2px solid #e2e8f0;
+            border-radius: 5px;
+            font-size: 1rem;
+            font-family: inherit;
+        }
+
+        .form-group input:focus,
+        .form-group textarea:focus {
+            outline: none;
+            border-color: #667eea;
+        }
+
+        .form-actions {
+            display: flex;
+            gap: 10px;
+            justify-content: flex-end;
+        }
+
+        @media (max-width: 768px) {
+            .header h1 {
+                font-size: 1.8rem;
+            }
+
+            .search-section {
+                flex-direction: column;
+            }
+
+            .search-input {
+                min-width: 100%;
+            }
+
+            .actions {
+                flex-direction: column;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>📊 Учёт Data Matrix кодов</h1>
+            <p>Загружайте, отслеживайте и управляйте вашими Data Matrix кодами</p>
+        </div>
+
+        <div id="alertContainer"></div>
+
+        <div class="card">
+            <div class="upload-section">
+                <div class="file-input-wrapper">
+                    <button class="btn btn-primary">
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+                            <polyline points="17 8 12 3 7 8"/>
+                            <line x1="12" y1="3" x2="12" y2="15"/>
+                        </svg>
+                        Загрузить CSV файл
+                    </button>
+                    <input type="file" id="csvFileInput" accept=".csv">
+                </div>
+                <button class="btn btn-success" onclick="openAddModal()">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <line x1="12" y1="5" x2="12" y2="19"/>
+                        <line x1="5" y1="12" x2="19" y2="12"/>
+                    </svg>
+                    Добавить код вручную
+                </button>
+                <button class="btn btn-secondary" onclick="exportToCSV()">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+                        <polyline points="7 10 12 15 17 10"/>
+                        <line x1="12" y1="15" x2="12" y2="3"/>
+                    </svg>
+                    Экспорт в CSV
+                </button>
+                <button class="btn btn-danger" onclick="clearAllData()">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <polyline points="3 6 5 6 21 6"/>
+                        <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>
+                    </svg>
+                    Очистить всё
+                </button>
+            </div>
+        </div>
+
+        <div class="stats">
+            <div class="stat-card">
+                <h3 id="totalCount">0</h3>
+                <p>Всего кодов</p>
+            </div>
+            <div class="stat-card">
+                <h3 id="todayCount">0</h3>
+                <p>Добавлено сегодня</p>
+            </div>
+            <div class="stat-card">
+                <h3 id="weekCount">0</h3>
+                <p>Добавлено за неделю</p>
+            </div>
+        </div>
+
+        <div class="card">
+            <div class="search-section">
+                <input type="text" class="search-input" id="searchInput" placeholder="🔍 Поиск по коду, описанию или статусу...">
+                <select class="search-input" id="statusFilter" style="flex: 0 0 200px;">
+                    <option value="">Все статусы</option>
+                    <option value="active">Активные</option>
+                    <option value="used">Использованные</option>
+                    <option value="expired">Истёкшие</option>
+                </select>
+            </div>
+
+            <div class="table-container">
+                <table id="codesTable">
+                    <thead>
+                        <tr>
+                            <th>ID</th>
+                            <th>Data Matrix Код</th>
+                            <th>Описание</th>
+                            <th>Дата добавления</th>
+                            <th>Статус</th>
+                            <th>Действия</th>
+                        </tr>
+                    </thead>
+                    <tbody id="tableBody">
+                    </tbody>
+                </table>
+                <div id="emptyState" class="empty-state" style="display: none;">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <rect x="3" y="3" width="18" height="18" rx="2" ry="2"/>
+                        <line x1="9" y1="9" x2="15" y2="15"/>
+                        <line x1="15" y1="9" x2="9" y2="15"/>
+                    </svg>
+                    <h3>Нет данных</h3>
+                    <p>Загрузите CSV файл или добавьте код вручную</p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal for adding/editing code -->
+    <div id="codeModal" class="modal">
+        <div class="modal-content">
+            <span class="close" onclick="closeModal()">&times;</span>
+            <h2 id="modalTitle" style="margin-bottom: 20px;">Добавить Data Matrix код</h2>
+            <form id="codeForm">
+                <input type="hidden" id="editId">
+                <div class="form-group">
+                    <label for="codeValue">Data Matrix Код *</label>
+                    <input type="text" id="codeValue" required placeholder="Введите код">
+                </div>
+                <div class="form-group">
+                    <label for="codeDescription">Описание</label>
+                    <textarea id="codeDescription" rows="3" placeholder="Описание кода (необязательно)"></textarea>
+                </div>
+                <div class="form-group">
+                    <label for="codeStatus">Статус</label>
+                    <select id="codeStatus" style="width: 100%; padding: 12px 15px; border: 2px solid #e2e8f0; border-radius: 5px; font-size: 1rem;">
+                        <option value="active">Активный</option>
+                        <option value="used">Использованный</option>
+                        <option value="expired">Истёкший</option>
+                    </select>
+                </div>
+                <div class="form-actions">
+                    <button type="button" class="btn btn-secondary" onclick="closeModal()">Отмена</button>
+                    <button type="submit" class="btn btn-primary">Сохранить</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Modal for order number input -->
+    <div id="orderModal" class="modal">
+        <div class="modal-content">
+            <span class="close" onclick="closeOrderModal()">&times;</span>
+            <h2 style="margin-bottom: 20px;">Ввод номера заказа</h2>
+            <p style="margin-bottom: 20px; color: #4a5568;">Найдены существующие коды в загруженном файле. Для изменения их статуса на "Использованный" введите номер заказа:</p>
+            <form id="orderForm">
+                <div class="form-group">
+                    <label for="orderNumber">Номер заказа *</label>
+                    <input type="text" id="orderNumber" required placeholder="Введите номер заказа">
+                </div>
+                <div class="form-group">
+                    <label for="orderComment">Комментарий (необязательно)</label>
+                    <textarea id="orderComment" rows="2" placeholder="Дополнительная информация"></textarea>
+                </div>
+                <div class="form-actions">
+                    <button type="button" class="btn btn-secondary" onclick="closeOrderModal()">Отмена</button>
+                    <button type="submit" class="btn btn-primary">Продолжить</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <script>
+        // Data storage
+        let codes = [];
+        let pendingUpdates = [];
+        let tempOrderData = {};
+
+        // Initialize app
+        document.addEventListener('DOMContentLoaded', function() {
+            loadFromStorage();
+            renderTable();
+            updateStats();
+            setupEventListeners();
+        });
+
+        // Load data from localStorage
+        function loadFromStorage() {
+            const stored = localStorage.getItem('dataMatrixCodes');
+            if (stored) {
+                codes = JSON.parse(stored);
+            }
+        }
+
+        // Save data to localStorage
+        function saveToStorage() {
+            localStorage.setItem('dataMatrixCodes', JSON.stringify(codes));
+        }
+
+        // Setup event listeners
+        function setupEventListeners() {
+            // File upload
+            document.getElementById('csvFileInput').addEventListener('change', handleFileUpload);
+            
+            // Search
+            document.getElementById('searchInput').addEventListener('input', renderTable);
+            
+            // Status filter
+            document.getElementById('statusFilter').addEventListener('change', renderTable);
+            
+            // Form submit
+            document.getElementById('codeForm').addEventListener('submit', handleFormSubmit);
+            
+            // Order form submit
+            document.getElementById('orderForm').addEventListener('submit', handleOrderSubmit);
+        }
+
+        // Handle CSV file upload
+        function handleFileUpload(event) {
+            const file = event.target.files[0];
+            if (!file) return;
+
+            const reader = new FileReader();
+            reader.onload = function(e) {
+                const content = e.target.result;
+                parseCSV(content);
+            };
+            reader.readAsText(file);
+            
+            // Reset input
+            event.target.value = '';
+        }
+
+        // Parse CSV content
+        function parseCSV(content) {
+            const lines = content.split('\n').filter(line => line.trim());
+            let imported = 0;
+            let duplicates = [];
+            let newCodes = [];
+
+            lines.forEach((line, index) => {
+                // Skip header row if it exists
+                if (index === 0 && (line.toLowerCase().includes('код') || line.toLowerCase().includes('code') || line.toLowerCase().includes('data'))) {
+                    return;
+                }
+
+                const columns = line.split(/[;,]/).map(col => col.trim());
+                
+                if (columns.length >= 1) {
+                    const code = columns[0];
+                    const description = columns[1] || '';
+                    
+                    if (!code) return;
+                    
+                    // Check if code already exists with status 'active'
+                    const existingCode = codes.find(c => c.code === code && c.status === 'active');
+                    if (existingCode) {
+                        duplicates.push({
+                            id: existingCode.id,
+                            code: code,
+                            description: existingCode.description || description
+                        });
+                    } else if (!codes.some(c => c.code === code)) {
+                        newCodes.push({
+                            code: code,
+                            description: description
+                        });
+                        imported++;
+                    }
+                }
+            });
+
+            // If there are duplicates, show order modal
+            if (duplicates.length > 0) {
+                pendingUpdates = duplicates;
+                tempOrderData.newCodes = newCodes;
+                openOrderModal();
+            } else {
+                // Add new codes directly
+                newCodes.forEach(item => {
+                    codes.push({
+                        id: Date.now() + Math.random(),
+                        code: item.code,
+                        description: item.description,
+                        status: 'active',
+                        createdAt: new Date().toISOString()
+                    });
+                });
+                
+                saveToStorage();
+                renderTable();
+                updateStats();
+
+                if (imported > 0) {
+                    showAlert(`Успешно импортировано ${imported} кодов`, 'success');
+                } else {
+                    showAlert('Не найдено кодов для импорта или все коды уже существуют', 'info');
+                }
+            }
+        }
+
+        // Open order modal
+        function openOrderModal() {
+            document.getElementById('orderModal').style.display = 'block';
+            document.getElementById('orderNumber').value = '';
+            document.getElementById('orderComment').value = '';
+            document.getElementById('orderNumber').focus();
+        }
+
+        // Close order modal
+        function closeOrderModal() {
+            document.getElementById('orderModal').style.display = 'none';
+            pendingUpdates = [];
+            tempOrderData = {};
+        }
+
+        // Handle order form submit
+        function handleOrderSubmit(event) {
+            event.preventDefault();
+            
+            const orderNumber = document.getElementById('orderNumber').value.trim();
+            const orderComment = document.getElementById('orderComment').value.trim();
+            
+            if (!orderNumber) {
+                showAlert('Введите номер заказа', 'error');
+                return;
+            }
+
+            // Update status of duplicate codes to 'used'
+            let updatedCount = 0;
+            pendingUpdates.forEach(item => {
+                const codeIndex = codes.findIndex(c => c.id === item.id);
+                if (codeIndex !== -1) {
+                    codes[codeIndex].status = 'used';
+                    codes[codeIndex].orderNumber = orderNumber;
+                    codes[codeIndex].orderComment = orderComment;
+                    codes[codeIndex].usedAt = new Date().toISOString();
+                    updatedCount++;
+                }
+            });
+
+            // Add new codes
+            tempOrderData.newCodes.forEach(item => {
+                codes.push({
+                    id: Date.now() + Math.random(),
+                    code: item.code,
+                    description: item.description,
+                    status: 'active',
+                    createdAt: new Date().toISOString()
+                });
+            });
+
+            saveToStorage();
+            renderTable();
+            updateStats();
+            closeOrderModal();
+
+            let message = `Обновлено статусов: ${updatedCount}`;
+            if (tempOrderData.newCodes.length > 0) {
+                message += `, добавлено новых: ${tempOrderData.newCodes.length}`;
+            }
+            showAlert(message, 'success');
+        }
+
+        // Render table
+        function renderTable() {
+            const tbody = document.getElementById('tableBody');
+            const searchInput = document.getElementById('searchInput').value.toLowerCase();
+            const statusFilter = document.getElementById('statusFilter').value;
+            const emptyState = document.getElementById('emptyState');
+
+            let filteredCodes = codes.filter(code => {
+                const matchesSearch = 
+                    code.code.toLowerCase().includes(searchInput) ||
+                    code.description.toLowerCase().includes(searchInput) ||
+                    code.status.toLowerCase().includes(searchInput);
+                
+                const matchesStatus = !statusFilter || code.status === statusFilter;
+                
+                return matchesSearch && matchesStatus;
+            });
+
+            if (filteredCodes.length === 0) {
+                tbody.innerHTML = '';
+                emptyState.style.display = 'block';
+                document.querySelector('.table-container').querySelector('table').style.display = 'none';
+            } else {
+                emptyState.style.display = 'none';
+                document.querySelector('.table-container').querySelector('table').style.display = 'table';
+                
+                tbody.innerHTML = filteredCodes.map(code => {
+                    const date = new Date(code.createdAt).toLocaleDateString('ru-RU');
+                    const statusClass = getStatusClass(code.status);
+                    const statusText = getStatusText(code.status);
+                    const orderInfo = code.orderNumber ? `<br><small style="color: #718096;">📦 Заказ: ${escapeHtml(code.orderNumber)}</small>` : '';
+                    const usedDate = code.usedAt ? `<br><small style="color: #718096;">🕐 ${new Date(code.usedAt).toLocaleString('ru-RU')}</small>` : '';
+                    
+                    return `
+                        <tr>
+                            <td>${Math.floor(code.id)}</td>
+                            <td style="font-family: monospace; font-size: 0.9em;">${escapeHtml(code.code)}${orderInfo}${usedDate}</td>
+                            <td>${escapeHtml(code.description)}</td>
+                            <td>${date}</td>
+                            <td><span class="status-badge ${statusClass}">${statusText}</span></td>
+                            <td class="actions">
+                                <button class="btn btn-small btn-primary" onclick="editCode(${code.id})">✏️</button>
+                                <button class="btn btn-small btn-danger" onclick="deleteCode(${code.id})">🗑️</button>
+                            </td>
+                        </tr>
+                    `;
+                }).join('');
+            }
+        }
+
+        // Get status badge class
+        function getStatusClass(status) {
+            switch(status) {
+                case 'active': return 'status-active';
+                case 'used': return 'status-used';
+                case 'expired': return 'status-expired';
+                default: return '';
+            }
+        }
+
+        // Get status text
+        function getStatusText(status) {
+            switch(status) {
+                case 'active': return 'Активный';
+                case 'used': return 'Использованный';
+                case 'expired': return 'Истёкший';
+                default: return status;
+            }
+        }
+
+        // Update statistics
+        function updateStats() {
+            const now = new Date();
+            const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+            const weekAgo = new Date(today.getTime() - 7 * 24 * 60 * 60 * 1000);
+
+            const todayCount = codes.filter(code => new Date(code.createdAt) >= today).length;
+            const weekCount = codes.filter(code => new Date(code.createdAt) >= weekAgo).length;
+
+            document.getElementById('totalCount').textContent = codes.length;
+            document.getElementById('todayCount').textContent = todayCount;
+            document.getElementById('weekCount').textContent = weekCount;
+        }
+
+        // Open add modal
+        function openAddModal() {
+            document.getElementById('modalTitle').textContent = 'Добавить Data Matrix код';
+            document.getElementById('codeForm').reset();
+            document.getElementById('editId').value = '';
+            document.getElementById('codeModal').style.display = 'block';
+        }
+
+        // Close modal
+        function closeModal() {
+            document.getElementById('codeModal').style.display = 'none';
+        }
+
+        // Edit code
+        function editCode(id) {
+            const code = codes.find(c => c.id === id);
+            if (!code) return;
+
+            document.getElementById('modalTitle').textContent = 'Редактировать Data Matrix код';
+            document.getElementById('editId').value = code.id;
+            document.getElementById('codeValue').value = code.code;
+            document.getElementById('codeDescription').value = code.description;
+            document.getElementById('codeStatus').value = code.status;
+            document.getElementById('codeModal').style.display = 'block';
+        }
+
+        // Handle form submit
+        function handleFormSubmit(event) {
+            event.preventDefault();
+            
+            const editId = document.getElementById('editId').value;
+            const codeValue = document.getElementById('codeValue').value.trim();
+            const description = document.getElementById('codeDescription').value.trim();
+            const status = document.getElementById('codeStatus').value;
+
+            if (editId) {
+                // Edit existing
+                const index = codes.findIndex(c => c.id == editId);
+                if (index !== -1) {
+                    codes[index] = {
+                        ...codes[index],
+                        code: codeValue,
+                        description: description,
+                        status: status
+                    };
+                    showAlert('Код успешно обновлён', 'success');
+                }
+            } else {
+                // Add new
+                if (codes.some(c => c.code === codeValue)) {
+                    showAlert('Такой код уже существует', 'error');
+                    return;
+                }
+                
+                codes.push({
+                    id: Date.now(),
+                    code: codeValue,
+                    description: description,
+                    status: status,
+                    createdAt: new Date().toISOString()
+                });
+                showAlert('Код успешно добавлен', 'success');
+            }
+
+            saveToStorage();
+            renderTable();
+            updateStats();
+            closeModal();
+        }
+
+        // Delete code
+        function deleteCode(id) {
+            if (confirm('Вы уверены, что хотите удалить этот код?')) {
+                codes = codes.filter(c => c.id !== id);
+                saveToStorage();
+                renderTable();
+                updateStats();
+                showAlert('Код удалён', 'success');
+            }
+        }
+
+        // Clear all data
+        function clearAllData() {
+            if (codes.length === 0) {
+                showAlert('Нет данных для очистки', 'info');
+                return;
+            }
+            
+            if (confirm('Вы уверены, что хотите удалить ВСЕ коды? Это действие необратимо.')) {
+                codes = [];
+                saveToStorage();
+                renderTable();
+                updateStats();
+                showAlert('Все данные удалены', 'success');
+            }
+        }
+
+        // Export to CSV
+        function exportToCSV() {
+            if (codes.length === 0) {
+                showAlert('Нет данных для экспорта', 'info');
+                return;
+            }
+
+            const headers = ['ID;Код;Описание;Статус;Дата создания'];
+            const rows = codes.map(code => {
+                const date = new Date(code.createdAt).toLocaleDateString('ru-RU');
+                return `${Math.floor(code.id)};${code.code};${code.description};${code.status};${date}`;
+            });
+
+            const csvContent = [headers, ...rows].join('\n');
+            const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+            const link = document.createElement('a');
+            link.href = URL.createObjectURL(blob);
+            link.download = `data_matrix_codes_${new Date().toISOString().slice(0, 10)}.csv`;
+            link.click();
+            
+            showAlert('Данные экспортированы в CSV файл', 'success');
+        }
+
+        // Show alert
+        function showAlert(message, type) {
+            const container = document.getElementById('alertContainer');
+            const alert = document.createElement('div');
+            alert.className = `alert alert-${type}`;
+            alert.textContent = message;
+            container.appendChild(alert);
+
+            setTimeout(() => {
+                alert.remove();
+            }, 3000);
+        }
+
+        // Escape HTML
+        function escapeHtml(text) {
+            const div = document.createElement('div');
+            div.textContent = text;
+            return div.innerHTML;
+        }
+
+        // Close modal when clicking outside
+        window.onclick = function(event) {
+            const codeModal = document.getElementById('codeModal');
+            const orderModal = document.getElementById('orderModal');
+            
+            if (event.target === codeModal) {
+                closeModal();
+            }
+            if (event.target === orderModal) {
+                closeOrderModal();
+            }
+        }
+    </script>
+</body>
+</html>
