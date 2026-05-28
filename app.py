@@ -1,9 +1,9 @@
-import tkinter as tk
-from tkinter import filedialog, messagebox, ttk
-import csv
-import sqlite3
-import os
 import customtkinter as ctk
+from tkinter import filedialog, messagebox
+import sqlite3
+import pandas as pd
+import os
+import sys
 from datetime import datetime
 
 # Настройки внешнего вида
@@ -19,59 +19,34 @@ class DataMatrixApp(ctk.CTk):
 
         # Инициализация БД
         self.db_name = "datamatrix.db"
+        if getattr(sys, 'frozen', False):
+            # Если запущено как .exe
+            self.db_name = os.path.join(os.path.dirname(sys.executable), "datamatrix.db")
+        
         self.init_db()
 
-        # Layout
-        self.grid_columnconfigure(1, weight=1)
+        # Интерфейс
+        self.grid_columnconfigure(0, weight=1)
         self.grid_rowconfigure(1, weight=1)
 
-        # Боковая панель
-        self.sidebar_frame = ctk.CTkFrame(self, width=200, corner_radius=0)
-        self.sidebar_frame.grid(row=0, column=0, rowspan=2, sticky="nsew")
-        self.sidebar_frame.grid_rowconfigure(4, weight=1)
+        # Верхняя панель
+        self.top_frame = ctk.CTkFrame(self)
+        self.top_frame.grid(row=0, column=0, sticky="ew", padx=10, pady=10)
 
-        self.logo_label = ctk.CTkLabel(self.sidebar_frame, text="DM Учёт", font=ctk.CTkFont(size=20, weight="bold"))
-        self.logo_label.grid(row=0, column=0, padx=20, pady=(20, 10))
+        self.btn_load = ctk.CTkButton(self.top_frame, text="Загрузить CSV", command=self.load_csv)
+        self.btn_load.pack(side="left", padx=5)
 
-        self.btn_upload = ctk.CTkButton(self.sidebar_frame, text="Загрузить CSV", command=self.upload_csv)
-        self.btn_upload.grid(row=1, column=0, padx=20, pady=10)
+        self.btn_export = ctk.CTkButton(self.top_frame, text="Экспорт в CSV", command=self.export_csv)
+        self.btn_export.pack(side="left", padx=5)
 
-        self.btn_export = ctk.CTkButton(self.sidebar_frame, text="Экспорт в CSV", command=self.export_csv)
-        self.btn_export.grid(row=2, column=0, padx=20, pady=10)
+        self.lbl_status = ctk.CTkLabel(self.top_frame, text="Готов к работе")
+        self.lbl_status.pack(side="right", padx=10)
 
-        self.btn_clear = ctk.CTkButton(self.sidebar_frame, text="Очистить базу", fg_color="red", command=self.clear_db)
-        self.btn_clear.grid(row=3, column=0, padx=20, pady=10)
-
-        self.status_label = ctk.CTkLabel(self.sidebar_frame, text="", wraplength=180)
-        self.status_label.grid(row=5, column=0, padx=20, pady=20)
-
-        # Основная область
-        self.search_entry = ctk.CTkEntry(self, placeholder_text="Поиск по коду...")
-        self.search_entry.grid(row=0, column=1, padx=20, pady=(20, 10), sticky="ew")
-        self.search_entry.bind("<KeyRelease>", self.filter_table)
-
-        # Таблица
-        self.tree = ttk.Treeview(self, columns=("code", "description", "status", "order_id", "date_used"), show="headings")
-        self.tree.heading("code", text="Код")
-        self.tree.heading("description", text="Описание")
-        self.tree.heading("status", text="Статус")
-        self.tree.heading("order_id", text="№ Заказа")
-        self.tree.heading("date_used", text="Дата использования")
+        # Список кодов
+        self.scroll_frame = ctk.CTkScrollableFrame(self, label_text="Список кодов")
+        self.scroll_frame.grid(row=1, column=0, sticky="nsew", padx=10, pady=10)
         
-        self.tree.column("code", width=250)
-        self.tree.column("description", width=200)
-        self.tree.column("status", width=100)
-        self.tree.column("order_id", width=100)
-        self.tree.column("date_used", width=150)
-
-        self.tree.grid(row=1, column=1, padx=20, pady=10, sticky="nsew")
-
-        # Scrollbar
-        scrollbar = ttk.Scrollbar(self, orient=tk.VERTICAL, command=self.tree.yview)
-        self.tree.configure(yscroll=scrollbar.set)
-        scrollbar.grid(row=1, column=2, sticky="ns", pady=10)
-
-        self.load_data()
+        self.refresh_list()
 
     def init_db(self):
         conn = sqlite3.connect(self.db_name)
@@ -82,203 +57,136 @@ class DataMatrixApp(ctk.CTk):
                 code TEXT UNIQUE,
                 description TEXT,
                 status TEXT DEFAULT 'Активный',
-                order_id TEXT,
-                date_used TEXT
+                order_number TEXT,
+                used_date TEXT
             )
         ''')
         conn.commit()
         conn.close()
 
-    def load_data(self, filter_text=""):
-        for item in self.tree.get_children():
-            self.tree.delete(item)
-        
+    def refresh_list(self):
+        for widget in self.scroll_frame.winfo_children():
+            widget.destroy()
+            
         conn = sqlite3.connect(self.db_name)
         cursor = conn.cursor()
-        
-        query = "SELECT code, description, status, order_id, date_used FROM codes"
-        if filter_text:
-            query += f" WHERE code LIKE '%{filter_text}%'"
-            
-        cursor.execute(query)
+        cursor.execute("SELECT code, status, order_number, used_date FROM codes ORDER BY id DESC")
         rows = cursor.fetchall()
         conn.close()
 
+        header = ctk.CTkFrame(self.scroll_frame)
+        header.pack(fill="x", padx=5, pady=2)
+        ctk.CTkLabel(header, text="Код", width=200, anchor="w").pack(side="left", padx=5)
+        ctk.CTkLabel(header, text="Статус", width=100, anchor="w").pack(side="left", padx=5)
+        ctk.CTkLabel(header, text="Заказ", width=150, anchor="w").pack(side="left", padx=5)
+        ctk.CTkLabel(header, text="Дата использования", width=150, anchor="w").pack(side="left", padx=5)
+
         for row in rows:
-            self.tree.insert("", tk.END, values=row)
-        
-        self.update_status(f"Всего записей: {len(rows)}")
+            item_frame = ctk.CTkFrame(self.scroll_frame)
+            item_frame.pack(fill="x", padx=5, pady=1)
+            
+            color = "green" if row[1] == 'Активный' else "red"
+            
+            ctk.CTkLabel(item_frame, text=row[0], width=200, anchor="w").pack(side="left", padx=5)
+            ctk.CTkLabel(item_frame, text=row[1], text_color=color, width=100, anchor="w").pack(side="left", padx=5)
+            ctk.CTkLabel(item_frame, text=row[2] or "-", width=150, anchor="w").pack(side="left", padx=5)
+            ctk.CTkLabel(item_frame, text=row[3] or "-", width=150, anchor="w").pack(side="left", padx=5)
 
-    def update_status(self, text):
-        self.status_label.configure(text=text)
-
-    def upload_csv(self):
+    def load_csv(self):
         file_path = filedialog.askopenfilename(filetypes=[("CSV files", "*.csv")])
         if not file_path:
             return
 
         try:
-            with open(file_path, 'r', encoding='utf-8-sig') as f:
-                # Пробуем определить разделитель
-                sample = f.read(1024)
-                f.seek(0)
-                try:
-                    dialect = csv.Sniffer().sniff(sample, delimiters=';,')
-                    reader = csv.reader(f, dialect)
-                except:
-                    reader = csv.reader(f, delimiter=';') # По умолчанию точка с запятой
-
-                rows = list(reader)
-        except Exception as e:
-            messagebox.showerror("Ошибка", f"Не удалось прочитать файл: {e}")
-            return
-
-        if not rows:
-            messagebox.showwarning("Внимание", "Файл пуст")
-            return
-
-        # Разделяем на новые и существующие
-        new_codes = []
-        existing_codes = []
-
-        conn = sqlite3.connect(self.db_name)
-        cursor = conn.cursor()
-
-        for row in rows:
-            if len(row) < 1: continue
-            code = row[0].strip()
-            desc = row[1].strip() if len(row) > 1 else ""
+            df = pd.read_csv(file_path)
+            if df.shape[1] < 1:
+                raise ValueError("Файл пуст или неверный формат")
             
-            if not code: continue
+            codes_col = df.columns[0]
+            desc_col = df.columns[1] if df.shape[1] > 1 else None
+            
+            new_codes = []
+            existing_active_codes = []
 
-            # Проверка наличия
-            cursor.execute("SELECT id, status FROM codes WHERE code=?", (code,))
-            result = cursor.fetchone()
-
-            if result:
-                # Код существует
-                db_id, status = result
-                if status == 'Активный':
-                    existing_codes.append((db_id, code))
-                # Если уже использован, игнорируем или можно обновить описание (пока игнорируем)
-            else:
-                new_codes.append((code, desc))
-
-        conn.close()
-
-        # 1. Добавляем новые
-        if new_codes:
             conn = sqlite3.connect(self.db_name)
             cursor = conn.cursor()
-            for code, desc in new_codes:
-                try:
-                    cursor.execute("INSERT INTO codes (code, description) VALUES (?, ?)", (code, desc))
-                except sqlite3.IntegrityError:
-                    pass # Дубликат в рамках одного файла
+
+            for index, row in df.iterrows():
+                code = str(row[codes_col]).strip()
+                desc = str(row[desc_col]).strip() if desc_col is not None and pd.notna(row[desc_col]) else ""
+                
+                cursor.execute("SELECT status FROM codes WHERE code = ?", (code,))
+                result = cursor.fetchone()
+                
+                if result:
+                    if result[0] == 'Активный':
+                        existing_active_codes.append(code)
+                else:
+                    new_codes.append((code, desc))
+
+            if new_codes:
+                cursor.executemany("INSERT OR IGNORE INTO codes (code, description) VALUES (?, ?)", new_codes)
+            
             conn.commit()
             conn.close()
 
-        # 2. Обрабатываем существующие (Активные -> Использованные)
-        if existing_codes:
-            dialog = OrderDialog(self, len(existing_codes))
-            self.wait_window(dialog)
+            msg = f"Новых кодов добавлено: {len(new_codes)}\n"
             
-            if dialog.result:
-                order_id = dialog.result
-                conn = sqlite3.connect(self.db_name)
-                cursor = conn.cursor()
-                now = datetime.now().strftime("%Y-%m-%d %H:%M")
+            if existing_active_codes:
+                dialog = ctk.CTkToplevel(self)
+                dialog.title("Обнаружены дубликаты")
+                dialog.geometry("400x200")
+                dialog.grab_set()
                 
-                ids = [item[0] for item in existing_codes]
-                placeholders = ','.join('?' * len(ids))
+                ctk.CTkLabel(dialog, text=f"Найдено {len(existing_active_codes)} кодов (статус: Активный).\nВведите номер заказа:").pack(pady=10, padx=10)
                 
-                cursor.execute(f"""
-                    UPDATE codes 
-                    SET status='Использован', order_id=?, date_used=? 
-                    WHERE id IN ({placeholders})
-                """, [order_id, now] + ids)
+                entry_order = ctk.CTkEntry(dialog, placeholder_text="Номер заказа")
+                entry_order.pack(pady=10, padx=20, fill="x")
                 
-                conn.commit()
-                conn.close()
-                messagebox.showinfo("Успех", f"Обновлено статусов: {len(existing_codes)}\nЗаказ: {order_id}")
+                def confirm_update():
+                    order_num = entry_order.get().strip()
+                    if not order_num:
+                        messagebox.showwarning("Ошибка", "Введите номер заказа!")
+                        return
+                    
+                    conn = sqlite3.connect(self.db_name)
+                    cursor = conn.cursor()
+                    now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+                    
+                    placeholders = ','.join('?' * len(existing_active_codes))
+                    sql = f"UPDATE codes SET status='Использован', order_number=?, used_date=? WHERE code IN ({placeholders})"
+                    params = [order_num, now] + existing_active_codes
+                    
+                    cursor.execute(sql, params)
+                    conn.commit()
+                    conn.close()
+                    
+                    msg += f"Обновлено: {len(existing_active_codes)}\nЗаказ: {order_num}"
+                    messagebox.showinfo("Результат", msg)
+                    dialog.destroy()
+                    self.refresh_list()
+
+                ctk.CTkButton(dialog, text="Подтвердить", command=confirm_update).pack(pady=10)
             else:
-                messagebox.showinfo("Отмена", "Операция обновления статусов отменена пользователем.")
+                messagebox.showinfo("Результат", msg)
+                self.refresh_list()
 
-        elif not new_codes and not existing_codes:
-             messagebox.showinfo("Инфо", "В файле не найдено новых или активных кодов для обработки.")
-        else:
-            if new_codes:
-                messagebox.showinfo("Успех", f"Добавлено новых кодов: {len(new_codes)}")
-
-        self.load_data()
+        except Exception as e:
+            messagebox.showerror("Ошибка", f"Не удалось загрузить файл:\n{str(e)}")
 
     def export_csv(self):
         file_path = filedialog.asksaveasfilename(defaultextension=".csv", filetypes=[("CSV files", "*.csv")])
         if not file_path:
             return
         
-        conn = sqlite3.connect(self.db_name)
-        cursor = conn.cursor()
-        cursor.execute("SELECT code, description, status, order_id, date_used FROM codes")
-        rows = cursor.fetchall()
-        conn.close()
-
         try:
-            with open(file_path, 'w', newline='', encoding='utf-8-sig') as f:
-                writer = csv.writer(f, delimiter=';')
-                writer.writerow(['Код', 'Описание', 'Статус', 'Заказ', 'Дата использования'])
-                writer.writerows(rows)
+            conn = sqlite3.connect(self.db_name)
+            df = pd.read_sql_query("SELECT code, description, status, order_number, used_date FROM codes", conn)
+            conn.close()
+            df.to_csv(file_path, index=False, sep=';')
             messagebox.showinfo("Успех", "Данные экспортированы!")
         except Exception as e:
-            messagebox.showerror("Ошибка", f"Не удалось сохранить файл: {e}")
-
-    def filter_table(self, event):
-        text = self.search_entry.get()
-        self.load_data(text)
-
-    def clear_db(self):
-        if messagebox.askyesno("Подтверждение", "Вы уверены? Все данные будут удалены!"):
-            conn = sqlite3.connect(self.db_name)
-            cursor = conn.cursor()
-            cursor.execute("DELETE FROM codes")
-            conn.commit()
-            conn.close()
-            self.load_data()
-
-class OrderDialog(ctk.CTkToplevel):
-    def __init__(self, parent, count):
-        super().__init__(parent)
-        self.title("Ввод номера заказа")
-        self.geometry("400x200")
-        self.resizable(False, False)
-        
-        self.result = None
-
-        label = ctk.CTkLabel(self, text=f"Найдено {count} совпадений.\nВведите номер заказа для списания:", font=ctk.CTkFont(size=14))
-        label.pack(pady=20)
-
-        self.entry = ctk.CTkEntry(self, width=300, placeholder_text="Например: ZAK-12345")
-        self.entry.pack(pady=10)
-        self.entry.focus()
-
-        btn_frame = ctk.CTkFrame(self, fg_color="transparent")
-        btn_frame.pack(pady=20)
-
-        btn_ok = ctk.CTkButton(btn_frame, text="Применить", command=self.on_ok)
-        btn_ok.pack(side=tk.LEFT, padx=10)
-
-        btn_cancel = ctk.CTkButton(btn_frame, text="Отмена", fg_color="gray", command=self.destroy)
-        btn_cancel.pack(side=tk.LEFT, padx=10)
-        
-        self.bind("<Return>", lambda e: self.on_ok())
-
-    def on_ok(self):
-        val = self.entry.get().strip()
-        if val:
-            self.result = val
-            self.destroy()
-        else:
-            messagebox.showwarning("Внимание", "Номер заказа не может быть пустым!")
+            messagebox.showerror("Ошибка", f"Ошибка экспорта: {str(e)}")
 
 if __name__ == "__main__":
     app = DataMatrixApp()
