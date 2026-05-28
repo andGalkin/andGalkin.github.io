@@ -461,9 +461,34 @@
         </div>
     </div>
 
+    <!-- Modal for order number input -->
+    <div id="orderModal" class="modal">
+        <div class="modal-content">
+            <span class="close" onclick="closeOrderModal()">&times;</span>
+            <h2 style="margin-bottom: 20px;">Ввод номера заказа</h2>
+            <p style="margin-bottom: 20px; color: #4a5568;">Найдены существующие коды в загруженном файле. Для изменения их статуса на "Использованный" введите номер заказа:</p>
+            <form id="orderForm">
+                <div class="form-group">
+                    <label for="orderNumber">Номер заказа *</label>
+                    <input type="text" id="orderNumber" required placeholder="Введите номер заказа">
+                </div>
+                <div class="form-group">
+                    <label for="orderComment">Комментарий (необязательно)</label>
+                    <textarea id="orderComment" rows="2" placeholder="Дополнительная информация"></textarea>
+                </div>
+                <div class="form-actions">
+                    <button type="button" class="btn btn-secondary" onclick="closeOrderModal()">Отмена</button>
+                    <button type="submit" class="btn btn-primary">Продолжить</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
     <script>
         // Data storage
         let codes = [];
+        let pendingUpdates = [];
+        let tempOrderData = {};
 
         // Initialize app
         document.addEventListener('DOMContentLoaded', function() {
@@ -499,6 +524,9 @@
             
             // Form submit
             document.getElementById('codeForm').addEventListener('submit', handleFormSubmit);
+            
+            // Order form submit
+            document.getElementById('orderForm').addEventListener('submit', handleOrderSubmit);
         }
 
         // Handle CSV file upload
@@ -521,7 +549,8 @@
         function parseCSV(content) {
             const lines = content.split('\n').filter(line => line.trim());
             let imported = 0;
-            let skipped = 0;
+            let duplicates = [];
+            let newCodes = [];
 
             lines.forEach((line, index) => {
                 // Skip header row if it exists
@@ -535,32 +564,116 @@
                     const code = columns[0];
                     const description = columns[1] || '';
                     
-                    // Check if code already exists
-                    const exists = codes.some(c => c.code === code);
-                    if (!exists && code) {
-                        codes.push({
-                            id: Date.now() + Math.random(),
+                    if (!code) return;
+                    
+                    // Check if code already exists with status 'active'
+                    const existingCode = codes.find(c => c.code === code && c.status === 'active');
+                    if (existingCode) {
+                        duplicates.push({
+                            id: existingCode.id,
                             code: code,
-                            description: description,
-                            status: 'active',
-                            createdAt: new Date().toISOString()
+                            description: existingCode.description || description
+                        });
+                    } else if (!codes.some(c => c.code === code)) {
+                        newCodes.push({
+                            code: code,
+                            description: description
                         });
                         imported++;
-                    } else {
-                        skipped++;
                     }
                 }
+            });
+
+            // If there are duplicates, show order modal
+            if (duplicates.length > 0) {
+                pendingUpdates = duplicates;
+                tempOrderData.newCodes = newCodes;
+                openOrderModal();
+            } else {
+                // Add new codes directly
+                newCodes.forEach(item => {
+                    codes.push({
+                        id: Date.now() + Math.random(),
+                        code: item.code,
+                        description: item.description,
+                        status: 'active',
+                        createdAt: new Date().toISOString()
+                    });
+                });
+                
+                saveToStorage();
+                renderTable();
+                updateStats();
+
+                if (imported > 0) {
+                    showAlert(`Успешно импортировано ${imported} кодов`, 'success');
+                } else {
+                    showAlert('Не найдено кодов для импорта или все коды уже существуют', 'info');
+                }
+            }
+        }
+
+        // Open order modal
+        function openOrderModal() {
+            document.getElementById('orderModal').style.display = 'block';
+            document.getElementById('orderNumber').value = '';
+            document.getElementById('orderComment').value = '';
+            document.getElementById('orderNumber').focus();
+        }
+
+        // Close order modal
+        function closeOrderModal() {
+            document.getElementById('orderModal').style.display = 'none';
+            pendingUpdates = [];
+            tempOrderData = {};
+        }
+
+        // Handle order form submit
+        function handleOrderSubmit(event) {
+            event.preventDefault();
+            
+            const orderNumber = document.getElementById('orderNumber').value.trim();
+            const orderComment = document.getElementById('orderComment').value.trim();
+            
+            if (!orderNumber) {
+                showAlert('Введите номер заказа', 'error');
+                return;
+            }
+
+            // Update status of duplicate codes to 'used'
+            let updatedCount = 0;
+            pendingUpdates.forEach(item => {
+                const codeIndex = codes.findIndex(c => c.id === item.id);
+                if (codeIndex !== -1) {
+                    codes[codeIndex].status = 'used';
+                    codes[codeIndex].orderNumber = orderNumber;
+                    codes[codeIndex].orderComment = orderComment;
+                    codes[codeIndex].usedAt = new Date().toISOString();
+                    updatedCount++;
+                }
+            });
+
+            // Add new codes
+            tempOrderData.newCodes.forEach(item => {
+                codes.push({
+                    id: Date.now() + Math.random(),
+                    code: item.code,
+                    description: item.description,
+                    status: 'active',
+                    createdAt: new Date().toISOString()
+                });
             });
 
             saveToStorage();
             renderTable();
             updateStats();
+            closeOrderModal();
 
-            if (imported > 0) {
-                showAlert(`Успешно импортировано ${imported} кодов${skipped > 0 ? ` (пропущено ${skipped} дубликатов)` : ''}`, 'success');
-            } else {
-                showAlert('Не найдено кодов для импорта', 'info');
+            let message = `Обновлено статусов: ${updatedCount}`;
+            if (tempOrderData.newCodes.length > 0) {
+                message += `, добавлено новых: ${tempOrderData.newCodes.length}`;
             }
+            showAlert(message, 'success');
         }
 
         // Render table
@@ -593,11 +706,13 @@
                     const date = new Date(code.createdAt).toLocaleDateString('ru-RU');
                     const statusClass = getStatusClass(code.status);
                     const statusText = getStatusText(code.status);
+                    const orderInfo = code.orderNumber ? `<br><small style="color: #718096;">📦 Заказ: ${escapeHtml(code.orderNumber)}</small>` : '';
+                    const usedDate = code.usedAt ? `<br><small style="color: #718096;">🕐 ${new Date(code.usedAt).toLocaleString('ru-RU')}</small>` : '';
                     
                     return `
                         <tr>
                             <td>${Math.floor(code.id)}</td>
-                            <td style="font-family: monospace; font-size: 0.9em;">${escapeHtml(code.code)}</td>
+                            <td style="font-family: monospace; font-size: 0.9em;">${escapeHtml(code.code)}${orderInfo}${usedDate}</td>
                             <td>${escapeHtml(code.description)}</td>
                             <td>${date}</td>
                             <td><span class="status-badge ${statusClass}">${statusText}</span></td>
@@ -787,9 +902,14 @@
 
         // Close modal when clicking outside
         window.onclick = function(event) {
-            const modal = document.getElementById('codeModal');
-            if (event.target === modal) {
+            const codeModal = document.getElementById('codeModal');
+            const orderModal = document.getElementById('orderModal');
+            
+            if (event.target === codeModal) {
                 closeModal();
+            }
+            if (event.target === orderModal) {
+                closeOrderModal();
             }
         }
     </script>
